@@ -343,7 +343,12 @@
     <div class="blocAdmin">
       <h3>Identité de la famille</h3>
       <div class="champ"><label>Nom affiché</label><input type="text" id="adminNomFamille"></div>
-      <div class="champ"><label>Logo (emoji ou lettre)</label><input type="text" id="adminLogoTexte" maxlength="2"></div>
+      <div class="champ"><label>Logo (emoji ou lettre, utilisé si aucune image)</label><input type="text" id="adminLogoTexte" maxlength="2"></div>
+      <div class="champ">
+        <label>Image du logo (remplace l'emoji si ajoutée)</label>
+        <input type="file" id="adminLogoFichier" accept="image/*">
+        <button class="btnPetit" id="btnRetirerLogo" type="button" style="margin-top:8px;">Retirer l'image actuelle</button>
+      </div>
       <button class="btnLargeur" id="btnEnregistrerIdentite">Enregistrer</button>
     </div>
 
@@ -441,29 +446,40 @@ $("formConnexion").addEventListener("submit", async (e) => {
   }catch(err){ afficherErreurAuth(messageErreurFirebase(err.code)); }
 });
 
+// Crée la fiche Firestore d'un membre si elle n'existe pas encore (utilisé à
+// l'inscription, et en réparation automatique si la fiche a échoué à se créer).
+async function creerFicheMembreSiAbsente(utilisateur, prenomEventuel){
+  const refMembre = db.collection("membres").doc(utilisateur.uid);
+  const dejaLa = await refMembre.get();
+  if(dejaLa.exists) return dejaLa.data();
+
+  const refConfig = db.collection("famille").doc("config");
+  let role = "membre";
+  await db.runTransaction(async (tx) => {
+    const snap = await tx.get(refConfig);
+    if(!snap.exists || !snap.data().premierMembreCree){
+      role = "admin";
+      tx.set(refConfig, { premierMembreCree:true, nomFamille:"Notre Famille", logoTexte:"N" }, { merge:true });
+    }
+  });
+  const fiche = {
+    prenom: prenomEventuel || (utilisateur.email ? utilisateur.email.split("@")[0] : "Membre"),
+    email: utilisateur.email, role, bloque:false,
+    creeLe: firebase.firestore.FieldValue.serverTimestamp(),
+    dernierActif: firebase.firestore.FieldValue.serverTimestamp()
+  };
+  await refMembre.set(fiche);
+  return fiche;
+}
+
 $("formInscription").addEventListener("submit", async (e) => {
   e.preventDefault();
   $("msgErreurAuth").style.display = "none";
   const prenom = $("siPrenom").value.trim();
   try{
     const identifiants = await auth.createUserWithEmailAndPassword($("siEmail").value.trim(), $("siMdp").value);
-    const uid = identifiants.user.uid;
     await identifiants.user.getIdToken(true); // évite un permission-denied si le jeton n'est pas encore propagé
-    // Le premier compte créé devient automatiquement administrateur.
-    const refConfig = db.collection("famille").doc("config");
-    let role = "membre";
-    await db.runTransaction(async (tx) => {
-      const snap = await tx.get(refConfig);
-      if(!snap.exists || !snap.data().premierMembreCree){
-        role = "admin";
-        tx.set(refConfig, { premierMembreCree:true, nomFamille:"Notre Famille", logoTexte:"N" }, { merge:true });
-      }
-    });
-    await db.collection("membres").doc(uid).set({
-      prenom, email: identifiants.user.email, role,
-      bloque:false, creeLe: firebase.firestore.FieldValue.serverTimestamp(),
-      dernierActif: firebase.firestore.FieldValue.serverTimestamp()
-    });
+    await creerFicheMembreSiAbsente(identifiants.user, prenom);
   }catch(err){ afficherErreurAuth(messageErreurFirebase(err.code)); }
 });
 
@@ -473,9 +489,20 @@ auth.onAuthStateChanged(async (utilisateur) => {
   $("ecranChargement").style.display = "none";
   detacherTousLesListeners();
   if(utilisateur){
-    const snap = await db.collection("membres").doc(utilisateur.uid).get();
+    let snap = await db.collection("membres").doc(utilisateur.uid).get();
     if(!snap.exists){
-      afficherErreurAuth("Ce compte existe mais n'a pas encore de profil. Demande à un administrateur de le créer, ou crée un nouveau compte via « Créer un compte ».");
+      // Réparation automatique : la fiche n'a pas été créée (coupure réseau,
+      // latence...). On réessaie plusieurs fois avant d'abandonner.
+      for(let tentative = 0; tentative < 3 && !snap.exists; tentative++){
+        try{
+          await utilisateur.getIdToken(true);
+          await creerFicheMembreSiAbsente(utilisateur);
+          snap = await db.collection("membres").doc(utilisateur.uid).get();
+        }catch(err){ await new Promise(r => setTimeout(r, 900)); }
+      }
+    }
+    if(!snap.exists){
+      afficherErreurAuth("Un problème de connexion empêche la création de ton profil. Vérifie ta connexion internet puis réessaie de te connecter.");
       auth.signOut();
       return;
     }
@@ -556,11 +583,25 @@ function ecouterConfigFamille(){
 }
 
 $("btnEnregistrerIdentite").addEventListener("click", async () => {
-  await db.collection("famille").doc("config").set({
+  const maj = {
     nomFamille: $("adminNomFamille").value.trim() || "Notre Famille",
     logoTexte: $("adminLogoTexte").value.trim() || "N"
-  }, { merge:true });
+  };
+  if(logoUrlEnAttente === null){ maj.logoUrl = firebase.firestore.FieldValue.delete(); }
+  else if(typeof logoUrlEnAttente === "string"){ maj.logoUrl = logoUrlEnAttente; }
+  await db.collection("famille").doc("config").set(maj, { merge:true });
+  logoUrlEnAttente = undefined;
+  $("adminLogoFichier").value = "";
 });
+
+let logoUrlEnAttente; // undefined = inchangé, null = à retirer, chaîne = nouvelle image
+$("adminLogoFichier").addEventListener("change", async (e) => {
+  const fichier = e.target.files[0];
+  if(!fichier) return;
+  try{ logoUrlEnAttente = await compresserImage(fichier, 200, 0.85); }
+  catch(err){ alert("Cette image est trop lourde, choisis-en une autre."); e.target.value = ""; }
+});
+$("btnRetirerLogo").addEventListener("click", () => { logoUrlEnAttente = null; $("adminLogoFichier").value = ""; });
 
 /* ==========================================================================
    7) FIL DE DISCUSSION
@@ -687,9 +728,13 @@ function ecouterAnnonces(){
       const a = doc.data();
       const carte = document.createElement("div");
       carte.className = "carteAnnonce";
-      carte.innerHTML = `<div class="metaA">${escHtml(a.auteur)} · ${formaterHeure(a.date)}</div><div class="texteA">${escHtml(a.texte)}</div>`;
+      carte.innerHTML = `<div class="metaA">${escHtml(a.auteur)} · ${formaterHeure(a.date)}</div><div class="texteA">${escHtml(a.texte)}</div>` +
+        (estAdmin ? `<button class="btnPetit danger btnSuppAnnonce" style="margin-top:10px;" data-id="${doc.id}">Supprimer</button>` : "");
       liste.appendChild(carte);
     });
+    if(estAdmin){
+      liste.querySelectorAll(".btnSuppAnnonce").forEach(b => b.addEventListener("click", () => db.collection("annonces").doc(b.dataset.id).delete()));
+    }
   });
   desabonnements.push(off);
 }
@@ -739,13 +784,20 @@ function afficherListeMembresAdmin(){
     const ligne = document.createElement("div");
     ligne.className = "ligneMembreAdmin";
     ligne.innerHTML = `
-      <span class="nomMA">${escHtml(m.prenom)}${estMoiMeme ? " (toi)" : ""}</span>
+      <input type="text" class="champPrenomAdmin" data-id="${m.id}" value="${escHtml(m.prenom)}" style="flex:1;border:1px solid #E3E1D8;border-radius:7px;padding:4px 7px;font-size:13px;font-weight:700;min-width:0;">
+      ${estMoiMeme ? '<span style="font-size:11px;color:var(--texte-clair);">(toi)</span>' : ""}
       <select class="selectRole" data-id="${m.id}" ${estMoiMeme ? "disabled" : ""}>
         <option value="membre" ${m.role==="membre"?"selected":""}>Membre</option>
         <option value="admin" ${m.role==="admin"?"selected":""}>Admin</option>
       </select>
       <button class="btnPetit danger" data-bloquer="${m.id}" ${estMoiMeme ? "disabled" : ""}>${m.bloque ? "Débloquer" : "Bloquer"}</button>`;
     zone.appendChild(ligne);
+  });
+  zone.querySelectorAll(".champPrenomAdmin").forEach(champ => {
+    champ.addEventListener("change", () => {
+      const val = champ.value.trim();
+      if(val) db.collection("membres").doc(champ.dataset.id).set({ prenom: val }, { merge:true });
+    });
   });
   zone.querySelectorAll(".selectRole").forEach(sel => sel.addEventListener("change", () => {
     db.collection("membres").doc(sel.dataset.id).set({ role: sel.value }, { merge:true });

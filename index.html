@@ -217,13 +217,13 @@
   @media (max-width:760px){
     .barreLaterale{position:fixed;left:0;top:0;bottom:0;transform:translateX(-100%);transition:transform .2s;z-index:500;}
     .barreLaterale.ouverte{transform:translateX(0);}
-    #btnMenuMobile{display:flex;}
+    .btnMenuMobile{display:flex;}
     .entetePanneau{padding:14px 16px;}
     #zoneMessages,#grillePhotos,#listeAnnonces,#listeMembresAppel{padding:14px 16px;}
     .barreEnvoi{padding:12px 16px 16px;}
     .messageBulle{max-width:82%;}
   }
-  #btnMenuMobile{display:none;width:34px;height:34px;border-radius:9px;background:var(--papier-carte);box-shadow:var(--ombre);font-size:16px;align-items:center;justify-content:center;margin-right:10px;}
+  .btnMenuMobile{display:none;width:34px;height:34px;border-radius:9px;background:var(--papier-carte);box-shadow:var(--ombre);font-size:16px;align-items:center;justify-content:center;margin-right:10px;flex-shrink:0;}
 </style>
 </head>
 <body>
@@ -281,7 +281,7 @@
     <main class="zoneContenu">
       <!-- FIL -->
       <section class="panneau actif" id="panneau-fil">
-        <div class="entetePanneau"><button id="btnMenuMobile">☰</button><h2>Fil de discussion</h2></div>
+        <div class="entetePanneau"><button id="btnMenuMobile" class="btnMenuMobile">☰</button><h2>Fil de discussion</h2></div>
         <div id="zoneMessages"></div>
         <div class="barreEnvoi">
           <textarea id="champMessage" placeholder="Écris un message à la famille…" rows="1"></textarea>
@@ -291,7 +291,7 @@
 
       <!-- PHOTOS -->
       <section class="panneau" id="panneau-photos">
-        <div class="entetePanneau"><button id="btnMenuMobile2">☰</button><h2>Photos de famille</h2></div>
+        <div class="entetePanneau"><button id="btnMenuMobile2" class="btnMenuMobile">☰</button><h2>Photos de famille</h2></div>
         <div id="grillePhotos"></div>
         <button class="btnAjoutFlottant" id="btnAjoutPhoto">+</button>
         <input type="file" id="entreePhoto" accept="image/*" style="display:none;">
@@ -299,14 +299,14 @@
 
       <!-- APPELS -->
       <section class="panneau" id="panneau-appels">
-        <div class="entetePanneau"><button id="btnMenuMobile3">☰</button><h2>Appels</h2></div>
+        <div class="entetePanneau"><button id="btnMenuMobile3" class="btnMenuMobile">☰</button><h2>Appels</h2></div>
         <div id="listeMembresAppel"></div>
       </section>
 
       <!-- ANNONCES -->
       <section class="panneau" id="panneau-annonces">
         <div class="entetePanneau">
-          <div style="display:flex;align-items:center;"><button id="btnMenuMobile4">☰</button><h2>Annonces</h2></div>
+          <div style="display:flex;align-items:center;"><button id="btnMenuMobile4" class="btnMenuMobile">☰</button><h2>Annonces</h2></div>
           <button class="btnPetit" id="btnOuvrirFormAnnonce" style="display:none;">+ Nouvelle annonce</button>
         </div>
         <div id="listeAnnonces"></div>

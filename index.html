@@ -397,7 +397,14 @@ let appelActifId = null;
 let connexionRTC = null;
 let fluxLocal = null;
 
-const CONFIG_STUN = { iceServers: [{ urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] }] };
+const CONFIG_STUN = { iceServers: [
+  { urls: ["stun:stun.l.google.com:19302", "stun:stun1.l.google.com:19302"] },
+  { urls: "stun:stun.relay.metered.ca:80" },
+  { urls: "turn:global.relay.metered.ca:80", username: "7b2f7698f752235af1a437f6", credential: "u0I0Eqpgh35tKDXe" },
+  { urls: "turn:global.relay.metered.ca:80?transport=tcp", username: "7b2f7698f752235af1a437f6", credential: "u0I0Eqpgh35tKDXe" },
+  { urls: "turn:global.relay.metered.ca:443", username: "7b2f7698f752235af1a437f6", credential: "u0I0Eqpgh35tKDXe" },
+  { urls: "turns:global.relay.metered.ca:443?transport=tcp", username: "7b2f7698f752235af1a437f6", credential: "u0I0Eqpgh35tKDXe" }
+] };
 
 /* ==========================================================================
    3) UTILITAIRES

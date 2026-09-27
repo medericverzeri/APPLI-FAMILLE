@@ -448,6 +448,7 @@ $("formInscription").addEventListener("submit", async (e) => {
   try{
     const identifiants = await auth.createUserWithEmailAndPassword($("siEmail").value.trim(), $("siMdp").value);
     const uid = identifiants.user.uid;
+    await identifiants.user.getIdToken(true); // évite un permission-denied si le jeton n'est pas encore propagé
     // Le premier compte créé devient automatiquement administrateur.
     const refConfig = db.collection("famille").doc("config");
     let role = "membre";
@@ -473,7 +474,11 @@ auth.onAuthStateChanged(async (utilisateur) => {
   detacherTousLesListeners();
   if(utilisateur){
     const snap = await db.collection("membres").doc(utilisateur.uid).get();
-    if(!snap.exists){ auth.signOut(); return; }
+    if(!snap.exists){
+      afficherErreurAuth("Ce compte existe mais n'a pas encore de profil. Demande à un administrateur de le créer, ou crée un nouveau compte via « Créer un compte ».");
+      auth.signOut();
+      return;
+    }
     const donnees = snap.data();
     if(donnees.bloque){
       afficherErreurAuth("Ton compte a été bloqué par un administrateur.");
